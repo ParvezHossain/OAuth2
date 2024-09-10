@@ -1,54 +1,93 @@
 const axios = require("axios");
 const User = require("../models/userModel");
 const jwtUtils = require("../utils/jwtUtils");
-const config = require("../config/config");
+const OAuthConfig = require("../config/oauthConfig");
+const qs = require("qs");
 
 class AuthService {
-  async exchangeCodeForToken(code) {
-    const response = await axios.post(config.tokenEndpoint, {
-      code,
-      client_id: config.clientID,
-      client_secret: config.clientSecret,
-      redirect_uri: config.redirectUri,
-      grant_type: "authorization_code",
-    });
-    return response.data.access_token;
+  async exchangeAuthorizationCodeForToken(authorizationCode) {
+    try {
+      const response = await axios.post(
+        OAuthConfig.getTokenEndpoint(),
+        qs.stringify({
+          client_id: OAuthConfig.getClientId(),
+          client_secret: OAuthConfig.getClientSecret(),
+          grant_type: "authorization_code",
+          code: authorizationCode,
+          redirect_uri: OAuthConfig.getRedirectUri(),
+        }),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(error.message);
+    }
   }
-  async fetchUserProfile(accessToken) {
-    const response = await axios.get(config.userInfoEndpoint, {
+  async getUserInfo(accessToken) {
+    const response = await axios.get(OAuthConfig.getUserInfoEndpoint(), {
       headers: {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        Authorization: `Bearer ${accessToken}`,
       },
     });
     return response.data;
   }
 
   async findOrCreateUser(profile) {
-    let user = await User.findOne({
-      oauthId: profile.id,
-    });
+    try {
+      let user = await User.findOne({ oauthId: profile.sub });
 
-    if (!user) {
-      user = new User({
-        email: profile.email,
-        name: profile.name,
-        oauthProvider: "google",
-        oauthId: profile.id,
-      });
+      if (!user) {
+        user = new User({
+          email: profile.email,
+          name: profile.name,
+          oauthProvider: "google",
+          oauthId: profile.sub,
+        });
+        await user.save();
+      }
+
+      return user;
+    } catch (error) {
+      console.error("Error in findOrCreateUser:", error);
+      throw error;
     }
-    await user.save();
   }
 
-  async loginUser(code) {
-    const accessToken = await this.exchangeCodeForToken(code);
-    const profile = await this.fetchUserProfile(accessToken);
-    const user = await this.findOrCreateUser(profile);
-    const token = jwtUtils.generateToken(user);
+  async loginUser(authorizationCode) {
+    try {
+      const googleToken = await this.exchangeAuthorizationCodeForToken(
+        authorizationCode
+      );
+      const { access_token } = googleToken;
+      const profile = await this.getUserInfo(access_token);
 
-    return {
-      user,
-      token,
-    };
+      const user = await this.findOrCreateUser(profile);
+      const token = jwtUtils.generateToken(user);
+
+      return {
+        user,
+        token,
+      };
+    } catch (error) {
+      console.log("error message:: ", error.message);
+    }
+  }
+
+  async consentScreen() {
+    const queryParams = new URLSearchParams({
+      client_id: process.env.CLIENT_ID,
+      redirect_uri: process.env.REDIRECT_URI,
+      response_type: "code",
+      scope: "openid email profile", // Scopes determine what information you're requesting
+      access_type: "offline",
+      prompt: "consent", // This forces Google to ask the user to grant permissions
+    });
+    // Redirect user to Google's OAuth 2.0 consent screen
+    return `${OAuthConfig.googleOAuthURL}?${queryParams}`;
   }
 }
 

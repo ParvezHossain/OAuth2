@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const config = require("../config/config");
+const OAuthConfig = require("../config/oauthConfig");
 module.exports = {
   generateToken: (user) => {
     return jwt.sign(
@@ -7,7 +7,7 @@ module.exports = {
         id: user._id,
         email: user.email,
       },
-      config.jwtSecret,
+      OAuthConfig.getClientSecret(),
       {
         expiresIn: "1h",
       }
@@ -15,7 +15,7 @@ module.exports = {
   },
   verifyToken: (token) => {
     try {
-      return jwt.verify(token, config.jwtSecret);
+      return jwt.verify(token, OAuthConfig.getClientSecret());
     } catch (error) {
       throw new Error("Invalid Token");
     }

@@ -10,9 +10,23 @@ class AuthContoller {
         token,
       });
     } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Authentication failed", error: error.message });
+      res.status(500).json({
+        message: "Authentication failed",
+        error: error.message,
+      });
+    }
+  }
+  async consentScreen(req, res) {
+    try {
+      const url = await authService.consentScreen();
+      // Redirect user to Google's OAuth 2.0 consent screen
+      res.redirect(`${url}`);
+      // res.json({ url });
+    } catch (error) {
+      res.status(500).json({
+        message: "Conset Screen failed",
+        error: error.message,
+      });
     }
   }
 }
