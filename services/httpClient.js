@@ -1,13 +1,13 @@
-const axios = require("axios");
-
+// httpClient.js
 class HttpClient {
   async post(url, data, headers = {}) {
-    return await axios.post(url, data, { headers });
+    throw new Error("Method not implemented");
   }
 
   async get(url, headers = {}) {
-    return await axios.get(url, { headers });
+    throw new Error("Method not implemented");
   }
 }
 
-module.exports = new HttpClient();
+// Export the class, not an instance
+module.exports = HttpClient;

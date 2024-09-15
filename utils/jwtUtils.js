@@ -9,7 +9,7 @@ module.exports = {
       },
       OAuthConfig.getClientSecret(),
       {
-        expiresIn: "1h",
+        expiresIn: OAuthConfig.getExpiresIn(),
       }
     );
   },

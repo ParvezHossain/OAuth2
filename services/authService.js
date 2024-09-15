@@ -3,16 +3,22 @@ const User = require("../models/userModel");
 const jwtUtils = require("../utils/jwtUtils");
 const OAuthConfig = require("../config/oauthConfig");
 const qs = require("qs");
+const HttpClientFactory = require("./httpAdapters/HttpClientFactory");
 
 class AuthService {
+  constructor() {
+    this.httpClient = HttpClientFactory.createHttpClient(
+      OAuthConfig.getHTTPClientType()
+    );
+  }
   async exchangeAuthorizationCodeForToken(authorizationCode) {
     try {
-      const response = await axios.post(
+      const response = await this.httpClient.post(
         OAuthConfig.getTokenEndpoint(),
         qs.stringify({
           client_id: OAuthConfig.getClientId(),
           client_secret: OAuthConfig.getClientSecret(),
-          grant_type: "authorization_code",
+          grant_type: OAuthConfig.getGrantType(),
           code: authorizationCode,
           redirect_uri: OAuthConfig.getRedirectUri(),
         }),
@@ -28,12 +34,19 @@ class AuthService {
     }
   }
   async getUserInfo(accessToken) {
-    const response = await axios.get(OAuthConfig.getUserInfoEndpoint(), {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-    return response.data;
+    try {
+      const response = await this.httpClient.get(
+        process.env.USER_INFO_ENDPOINT,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.log("response", error.message);
+    }
   }
 
   async findOrCreateUser(profile) {
@@ -44,7 +57,7 @@ class AuthService {
         user = new User({
           email: profile.email,
           name: profile.name,
-          oauthProvider: "google",
+          oauthProvider: OAuthConfig.getOAuthProvider(),
           oauthId: profile.sub,
         });
         await user.save();
@@ -79,12 +92,12 @@ class AuthService {
 
   async consentScreen() {
     const queryParams = new URLSearchParams({
-      client_id: process.env.CLIENT_ID,
-      redirect_uri: process.env.REDIRECT_URI,
-      response_type: "code",
+      client_id: OAuthConfig.getClientId(),
+      redirect_uri: OAuthConfig.getRedirectUri(),
+      response_type: OAuthConfig.getResponseType(),
       scope: "openid email profile", // Scopes determine what information you're requesting
-      access_type: "offline",
-      prompt: "consent", // This forces Google to ask the user to grant permissions
+      access_type: OAuthConfig.getConsentScreenAccessType(),
+      prompt: OAuthConfig.getConsentScreenPrompt(), // This forces Google to ask the user to grant permissions
     });
     // Redirect user to Google's OAuth 2.0 consent screen
     return `${OAuthConfig.googleOAuthURL}?${queryParams}`;
